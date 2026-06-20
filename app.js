@@ -698,7 +698,7 @@ function renderCurrentFrame() {
 
 function drawFrame(targetCtx, canvas, time, smoothForPlayback) {
   const video = els.sourceVideo;
-  const output = parseSize(els.outputSize.value);
+  const output = resolvePreviewSize();
   fitCanvas(canvas, output.width, output.height);
 
   targetCtx.clearRect(0, 0, canvas.width, canvas.height);
@@ -761,7 +761,7 @@ function buildScene(time, smoothForPlayback) {
     return { crop: null, selected, redactions };
   }
 
-  let crop = makePortraitCrop(selected.box, parseSize(els.outputSize.value));
+  let crop = makePortraitCrop(selected.box, resolvePreviewSize());
   if (smoothForPlayback && state.lastPreviewBox) {
     crop = smoothCrop(state.lastPreviewBox, crop, Number(els.smoothing.value));
   }
