@@ -32,7 +32,7 @@
           </div>
           <div class="topbar-actions">
             <label class="ghost-button upload-trigger" for="video-input">导入素材</label>
-            <button class="ghost-button" id="load-models-button">重新加载模型</button>
+            <button class="ghost-button" id="load-models-button">连接 YOLO</button>
             <button class="primary-button" id="analyze-button">识别人物</button>
           </div>
         </header>
@@ -78,7 +78,7 @@
                 <div class="inline-meta-item">
                   <span>识别模型</span>
                   <select id="model-selector">
-                    <option value="efficientdet" selected>EfficientDet Lite0 Person Detector</option>
+                    <option value="yolo11n" selected>YOLO11n Person Detector</option>
                   </select>
                 </div>
               </div>
@@ -126,7 +126,7 @@
               <div class="candidate-indicator" id="candidate-indicator">当前预览：未选择候选人</div>
               <button class="ghost-button small" id="candidate-next-button">下一个</button>
             </div>
-            <p class="tiny model-note">当前界面只保留可用的人体检测模型。YOLO 会在下一版改成本地 ONNX 推理接入，不再展示未落地的 Pose 选项。</p>
+            <p class="tiny model-note">识别已切到本地 YOLO 服务。导入视频后会自动探测模型状态，识别人物时直接走本地抽样分析。</p>
             <div class="person-list" id="track-list">
               <div class="empty-state small">先完成识别，再从列表里选一个主角，其他人会自动统一处理。</div>
             </div>

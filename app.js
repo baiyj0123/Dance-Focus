@@ -1,9 +1,3 @@
-const VISION_BUNDLE_URL =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
-const VISION_WASM_URL =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
-const DETECTOR_MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite";
 const MP4_MUXER_URL =
   "https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/+esm";
 const LOCAL_API_URL = "http://127.0.0.1:4818";
@@ -12,9 +6,7 @@ const HISTORY_KEY = "quiet-timeline-history-v1";
 const state = {
   mode: "portrait",
   currentStep: 1,
-  detectorKind: "efficientdet",
-  vision: null,
-  detector: null,
+  detectorKind: "yolo11n",
   detectorStatus: "idle",
   sourceFile: null,
   sourceUrl: "",
@@ -34,6 +26,8 @@ const state = {
   demoMode: false,
   lastAnalysisCount: 0,
   localApiReady: false,
+  yoloReady: false,
+  yoloModelName: "yolo11n.pt",
 };
 
 const els = {
@@ -308,7 +302,7 @@ async function loadVideoFile(file) {
     updateProgress(0, "视频已加载，可以开始识别");
     state.currentStep = 2;
     renderWorkflow();
-    void ensureDetector();
+    void ensureDetector({ silent: true });
   } catch (error) {
     console.error(error);
     resetProject(false);
@@ -322,60 +316,41 @@ async function loadVideoFile(file) {
   }
 }
 
-async function ensureDetector() {
-  if (state.detector) return state.detector;
-  if (state.detectorStatus === "loading") return null;
-
+async function ensureDetector(options = {}) {
+  const silent = Boolean(options.silent);
   try {
     state.detectorStatus = "loading";
     setStatus("model", "加载中");
     updateModelStatusCopy();
-    els.progressBadge.textContent = "Loading Model";
-    state.vision = state.vision || await import(VISION_BUNDLE_URL);
-    const fileset = await state.vision.FilesetResolver.forVisionTasks(VISION_WASM_URL);
-    state.detector = await Promise.race([createSelectedDetector(fileset), new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("MODEL_LOAD_TIMEOUT")), 15000);
-    })]);
+    els.progressBadge.textContent = "Checking YOLO";
+    await detectLocalApi();
+    if (!state.localApiReady || !state.yoloReady) {
+      throw new Error(state.localApiReady ? "YOLO_NOT_READY" : "LOCAL_API_OFFLINE");
+    }
     state.detectorStatus = "ready";
-    setStatus("model", "已就绪");
+    setStatus("model", "YOLO 已就绪");
     updateModelStatusCopy();
-    els.progressBadge.textContent = "Model Ready";
-    return state.detector;
+    els.progressBadge.textContent = "YOLO Ready";
+    return true;
   } catch (error) {
     console.error(error);
     state.detectorStatus = "error";
     setStatus("model", "加载失败");
     updateModelStatusCopy();
-    els.progressBadge.textContent = "Model Error";
-    alert(explainModelLoadError(error));
+    els.progressBadge.textContent = "YOLO Error";
+    if (!silent) {
+      alert(explainModelLoadError(error));
+    }
     return null;
   }
 }
 
-async function createSelectedDetector(fileset) {
-  return state.vision.ObjectDetector.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath: DETECTOR_MODEL_URL,
-    },
-    scoreThreshold: 0.25,
-    runningMode: "VIDEO",
-    maxResults: 6,
-    categoryAllowlist: ["person"],
-  });
-}
-
 function unloadDetector() {
-  try {
-    state.detector?.close?.();
-  } catch {
-    // noop
-  }
-  state.detector = null;
   state.detectorStatus = "idle";
 }
 
 function modelDisplayName(kind = state.detectorKind) {
-  return "EfficientDet Lite0 Person Detector";
+  return "YOLO11n Person Detector";
 }
 
 function updateModelStatusCopy() {
@@ -393,24 +368,34 @@ function updateModelStatusCopy() {
 async function detectLocalApi() {
   try {
     const response = await fetch(`${LOCAL_API_URL}/api/health`, { method: "GET" });
-    state.localApiReady = response.ok;
+    if (!response.ok) {
+      throw new Error("LOCAL_API_OFFLINE");
+    }
+    const payload = await response.json();
+    state.localApiReady = true;
+    state.yoloReady = Boolean(payload.yolo_ready);
+    state.yoloModelName = payload.yolo_model || "yolo11n.pt";
   } catch {
     state.localApiReady = false;
+    state.yoloReady = false;
+    state.yoloModelName = "yolo11n.pt";
   }
   if (els.pipelineStatus) {
-    els.pipelineStatus.textContent = state.localApiReady ? "本地 FFmpeg 已连接" : "未连接本地 FFmpeg";
+    els.pipelineStatus.textContent = state.localApiReady
+      ? `本地 YOLO + FFmpeg 已连接`
+      : "未连接本地 YOLO + FFmpeg";
   }
   if (els.pipelineNote) {
     els.pipelineNote.textContent = state.localApiReady
-      ? "正式导出会优先走本地 FFmpeg 逐帧渲染与 H.264 编码，避免浏览器导出卡顿发糊。"
-      : "未检测到本地 FFmpeg 服务。运行 `python3 studio_server.py` 后，导出会自动切到本地高质量 MP4。";
+      ? `识别与导出都会优先走本地服务。当前模型：${state.yoloModelName}。`
+      : "未检测到本地 YOLO 服务。请用 `/usr/bin/python3 studio_server.py` 启动后再识别和导出。";
   }
 }
 
 async function analyzeVideo() {
   if (!state.sourceLoaded || state.analysisBusy) return;
-  const detector = await ensureDetector();
-  if (!detector) return;
+  const ready = await ensureDetector();
+  if (!ready) return;
 
   state.analysisBusy = true;
   state.tracks = [];
@@ -424,19 +409,24 @@ async function analyzeVideo() {
   updateProgress(0, "正在抽样检测人物轨迹");
 
   const duration = state.metadata.duration;
-  const step = Number(els.sampleRate.value);
   let trackId = 1;
+  const analysis = await analyzeVideoViaLocalYolo(duration);
+  const frames = analysis.frames || [];
 
-  for (let t = 0; t <= duration; t += step) {
-    await seekVideo(Math.min(t, duration));
-    const detections = detectPersonsAtCurrentTime();
-    const boxes = dedupeBoxes(detections.map(normalizeDetection).filter(Boolean));
-    const assignments = assignToTracks(boxes, t, () => `P${trackId++}`);
-    state.analysisFrames.push({ time: t, boxes: assignments });
-    updateProgress(Math.min(t / duration, 1), `识别中 ${formatTime(t)} / ${formatTime(duration)}`);
+  if (frames.some((frame) => frame.boxes?.some((box) => box.trackId))) {
+    ingestTrackedFrames(frames, duration);
+  } else {
+    for (const frame of frames) {
+      const boxes = dedupeBoxes((frame.boxes || []).map(normalizeDetection).filter(Boolean));
+      const assignments = assignToTracks(boxes, frame.time, () => `P${trackId++}`);
+      state.analysisFrames.push({ time: frame.time, boxes: assignments });
+      updateProgress(
+        Math.min(frame.time / Math.max(duration, 0.01), 1),
+        `YOLO 识别中 ${formatTime(frame.time)} / ${formatTime(duration)}`
+      );
+    }
+    finalizeTracks();
   }
-
-  finalizeTracks();
   state.analysisBusy = false;
   state.inspectTrackId = state.tracks[0]?.id ?? null;
   state.tracks.forEach((track) => {
@@ -453,22 +443,6 @@ async function analyzeVideo() {
   renderCurrentFrame();
 }
 
-function detectPersonsAtCurrentTime() {
-  if (!state.detector) return [];
-  const video = els.sourceVideo;
-  let result;
-  try {
-    result = state.detector.detectForVideo(video, performance.now());
-  } catch {
-    try {
-      result = state.detector.detectForVideo(video);
-    } catch {
-      result = state.detector.detectForVideo(video, performance.now());
-    }
-  }
-  return result?.detections || [];
-}
-
 function normalizeDetection(detection) {
   if ("x" in detection && "w" in detection) {
     return detection;
@@ -483,6 +457,63 @@ function normalizeDetection(detection) {
     h: bbox.height,
     score: detection.categories?.[0]?.score || 0,
   };
+}
+
+async function analyzeVideoViaLocalYolo(duration) {
+  els.progressBadge.textContent = "Local YOLO";
+  updateProgress(0.06, "上传视频到本地 YOLO 服务");
+  const formData = new FormData();
+  formData.append("video", state.sourceFile, state.sourceFile?.name || "source.mp4");
+  formData.append("options", new Blob([JSON.stringify({
+    sampleRate: Number(els.sampleRate.value),
+    confidence: 0.25,
+    maxPeople: 8,
+    duration,
+  })], { type: "application/json" }), "options.json");
+
+  const response = await fetch(`${LOCAL_API_URL}/api/analyze`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await response.text() || "LOCAL_YOLO_FAILED");
+  }
+  const payload = await response.json();
+  return payload;
+}
+
+function ingestTrackedFrames(frames, duration) {
+  const trackMap = new Map();
+  state.analysisFrames = frames.map((frame) => {
+    const assignments = [];
+    for (const rawBox of frame.boxes || []) {
+      const box = normalizeDetection(rawBox);
+      if (!box) continue;
+      const trackId = rawBox.trackId || `P${trackMap.size + 1}`;
+      let track = trackMap.get(trackId);
+      if (!track) {
+        track = {
+          id: trackId,
+          policy: "redact",
+          color: colorForIndex(trackMap.size),
+          samples: [],
+          coverage: 0,
+          averageArea: 0,
+        };
+        trackMap.set(trackId, track);
+      }
+      track.samples.push({ time: frame.time, box });
+      assignments.push({ trackId, box });
+    }
+    updateProgress(
+      Math.min(frame.time / Math.max(duration, 0.01), 1),
+      `YOLO + ByteTrack 识别中 ${formatTime(frame.time)} / ${formatTime(duration)}`
+    );
+    return { time: frame.time, boxes: assignments };
+  });
+
+  state.tracks = [...trackMap.values()];
+  finalizeTracks();
 }
 
 function assignToTracks(boxes, time, nextId) {
@@ -1617,10 +1648,14 @@ function explainVideoLoadError(error, file) {
 }
 
 function explainModelLoadError(error) {
-  if (String(error?.message || "").includes("MODEL_LOAD_TIMEOUT")) {
-    return "识别模型加载超时。当前更像是浏览器端模型资源没有成功初始化，请刷新页面后重试；如果还不行，我会继续把模型改成本地文件。";
+  const message = String(error?.message || "");
+  if (message.includes("LOCAL_API_OFFLINE")) {
+    return "本地 YOLO 服务未连接。请在项目目录运行 `/usr/bin/python3 studio_server.py`，然后刷新页面重试。";
   }
-  return "模型加载失败。请确认当前网络可访问 jsDelivr 和 Google Storage，然后刷新页面重试。";
+  if (message.includes("YOLO_NOT_READY")) {
+    return "本地服务已启动，但 YOLO 模型还没就绪。请看终端是否还在下载模型或是否缺少依赖。";
+  }
+  return "YOLO 模型加载失败。请检查本地服务终端输出后重试。";
 }
 
 function explainMp4ExportError(error) {

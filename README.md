@@ -7,10 +7,10 @@
 
 ## 当前能力
 
-- 本地上传视频，不依赖后端
-- 导入视频后自动初始化识别模型
+- 本地上传视频
+- 导入视频后自动初始化本地 YOLO 连接状态
 - 当前默认识别模型
-  - `EfficientDet Lite0 Person Detector`
+  - `YOLO11n Person Detector`
 - 自动生成人物轨迹列表，可设定主舞者
 - `单人直拍` 和 `全画面打码` 两种模式
 - 支持马赛克、模糊、纯色遮挡三种处理方式
@@ -33,15 +33,21 @@ python3 studio_server.py
 
 ## 依赖说明
 
-- 前端模型运行时：`@mediapipe/tasks-vision`
-- 检测模型：Google 托管的 `efficientdet_lite0`
+- 本地识别：`/usr/bin/python3 + ultralytics + opencv-python-headless`
+- 检测模型：`YOLO11n`
+- 跟踪器：`ByteTrack`
 - 本地渲染：`python3 + numpy + ffmpeg`
 - 导出容器：`mp4`
 
 ## 当前限制
 
-- 依赖浏览器可访问 `jsDelivr` 和 `storage.googleapis.com`
-- 当前仍是浏览器端推理，不是服务端 YOLO/ReID 专业跟踪栈，所以多人快速交叉时还可能需要关键帧切主角
-- 如果要彻底锁住同一人，下一步应该接 `YOLO + ByteTrack/BoT-SORT + ReID`
+- 当前已经接入 `YOLO + ByteTrack`，但还没有 `ReID`，所以多人快速交叉、长时间遮挡后仍建议配合关键帧切主角
 - 本地逐帧渲染质量已经明显高于浏览器导出，但速度会慢于纯转码
 - 模糊/马赛克由本地 NumPy 渲染实现，已经够用，但还不是影视级遮罩分割
+
+## 下一步建议
+
+1. 接入 `ReID`，降低主角串人概率
+2. 增加可切换 `BoT-SORT`
+3. 增加人工补框和锁定关键帧
+4. 改成本地任务队列，支持长视频和批量导出

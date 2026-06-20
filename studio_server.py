@@ -9,6 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from renderer import render_project
+from yolo_backend import analyze_video, get_runtime_info
 
 
 ROOT = Path(__file__).resolve().parent
@@ -32,31 +33,50 @@ class StudioHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/health":
-            return self.respond_json({"ok": True, "render_dir": str(RENDER_DIR)})
+            runtime = get_runtime_info()
+            return self.respond_json({
+                "ok": True,
+                "render_dir": str(RENDER_DIR),
+                "yolo_ready": runtime["ready"],
+                "yolo_model": runtime["model_name"],
+                "yolo_detail": runtime["detail"],
+            })
         return super().do_GET()
 
     def do_POST(self):
-        if self.path != "/api/render":
+        if self.path not in {"/api/render", "/api/analyze"}:
             self.send_error(404, "Not Found")
             return
         try:
             fields = self.parse_multipart()
-            video_part = fields["video"]
-            project_part = fields["project"]
-            project = json.loads(project_part["content"].decode("utf-8"))
+            video_part = fields.get("video")
+            if not video_part:
+                raise RuntimeError("请求缺少 video 字段")
             filename = sanitize_filename(video_part.get("filename") or "source.mp4")
 
             with tempfile.TemporaryDirectory(prefix="dance_privacy_") as tmpdir:
                 source_path = Path(tmpdir) / filename
                 source_path.write_bytes(video_part["content"])
+                if self.path == "/api/analyze":
+                    options_part = fields.get("options")
+                    options = {}
+                    if options_part:
+                        options = json.loads(options_part["content"].decode("utf-8"))
+                    result = analyze_video(source_path, options)
+                    return self.respond_json({"ok": True, **result})
+
+                project_part = fields.get("project")
+                if not project_part:
+                    raise RuntimeError("请求缺少 project 字段")
+                project = json.loads(project_part["content"].decode("utf-8"))
                 output_name = f"{Path(filename).stem}-single-performer.mp4"
                 output_path = RENDER_DIR / output_name
                 result = render_project(source_path, project, output_path)
-            return self.respond_json({
-                "ok": True,
-                "download_url": f"/rendered/{urllib.parse.quote(output_name)}",
-                "size_label": result["size_label"],
-            })
+                return self.respond_json({
+                    "ok": True,
+                    "download_url": f"/rendered/{urllib.parse.quote(output_name)}",
+                    "size_label": result["size_label"],
+                })
         except Exception as exc:
             self.send_response(500)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -79,8 +99,6 @@ class StudioHandler(SimpleHTTPRequestHandler):
                 "content": part.get_payload(decode=True),
                 "content_type": part.get_content_type(),
             }
-        if "video" not in fields or "project" not in fields:
-            raise RuntimeError("请求缺少 video 或 project 字段")
         return fields
 
     def respond_json(self, payload: dict):

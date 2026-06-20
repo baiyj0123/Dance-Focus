@@ -1,3 +1,5 @@
 __pycache__/
 rendered/
 .DS_Store
+models/*.pt
+yolo11n.pt
