@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Quiet Timeline Studio</title>
+  <meta name="description" content="舞蹈室视频自动打码与单人直拍工作台">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <main class="workspace">
+      <section class="hero-header panel">
+        <header class="topbar">
+          <div class="topbar-copy">
+            <p class="eyebrow">Dance Studio Privacy Suite</p>
+            <h2>专业直拍剪辑工作台</h2>
+            <p class="topbar-note">导入视频后自动加载模型，识别人物后必须先选定一个跟踪主角，再设置关键帧和导出。</p>
+          </div>
+          <div class="topbar-metrics">
+            <div class="metric-card">
+              <span>识别采样</span>
+              <strong id="sampling-indicator">0.12s</strong>
+            </div>
+            <div class="metric-card">
+              <span>导出帧率</span>
+              <strong id="fps-indicator">60 fps</strong>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <label class="ghost-button upload-trigger" for="video-input">导入素材</label>
+            <button class="ghost-button" id="load-models-button">重新加载模型</button>
+            <button class="primary-button" id="analyze-button">识别人物</button>
+          </div>
+        </header>
+
+        <section class="workflow-steps">
+          <button class="workflow-step active" data-step="1" type="button">
+            <span>01</span>
+            <strong>导入素材</strong>
+            <small>上传视频与初始化项目</small>
+          </button>
+          <button class="workflow-step" data-step="2" type="button">
+            <span>02</span>
+            <strong>识别人物</strong>
+            <small>分析候选人物与主角</small>
+          </button>
+          <button class="workflow-step" data-step="3" type="button">
+            <span>03</span>
+            <strong>设置关键帧</strong>
+            <small>按时间点切换主角</small>
+          </button>
+          <button class="workflow-step" data-step="4" type="button">
+            <span>04</span>
+            <strong>导出设置</strong>
+            <small>分辨率、帧率、输出</small>
+          </button>
+        </section>
+      </section>
+
+      <section class="workbench-layout">
+        <div class="control-column">
+          <section class="upload-bar panel wide wizard-step active" data-step-panel="1">
+            <div class="upload-copy">
+              <h3>素材与识别配置</h3>
+              <p id="file-meta">支持本地横屏舞蹈视频。建议时长 3 分钟内以获得更快导出。</p>
+              <div class="inline-meta">
+                <div class="inline-meta-item">
+                  <span>模式</span>
+                  <div class="mode-list" id="mode-list">
+                    <button class="mode-pill active" data-mode="portrait">单人直拍</button>
+                    <button class="mode-pill" data-mode="privacy">全画面打码</button>
+                  </div>
+                </div>
+                <div class="inline-meta-item">
+                  <span>识别模型</span>
+                  <select id="model-selector">
+                    <option value="efficientdet" selected>EfficientDet Lite0 Person Detector</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="upload-actions">
+              <input id="video-input" type="file" accept="video/*" hidden>
+              <button class="ghost-button" id="demo-button">查看演示布局</button>
+              <button class="ghost-button danger-button" id="reset-button">重置项目</button>
+            </div>
+            <div class="step-footer">
+              <button class="primary-button next-step-button" id="go-step-2-button" type="button">下一步：识别人物</button>
+            </div>
+          </section>
+
+          <section class="panel status-strip">
+            <div class="status-chip">
+              <span>模型状态</span>
+              <strong id="model-status">未加载</strong>
+            </div>
+            <div class="status-chip">
+              <span>分析状态</span>
+              <strong id="analysis-status">等待视频</strong>
+            </div>
+            <div class="status-chip">
+              <span>导出状态</span>
+              <strong id="export-status">未开始</strong>
+            </div>
+            <div class="status-chip pipeline-chip">
+              <span>导出链路</span>
+              <strong id="pipeline-status">等待本地 FFmpeg</strong>
+            </div>
+          </section>
+
+          <section class="panel wizard-step" data-step-panel="2">
+            <div class="section-head">
+              <h3>选择跟踪主角</h3>
+              <span class="quiet-count" id="track-count">0</span>
+            </div>
+            <div class="selection-callout" id="selection-callout">
+              <strong>先从识别结果里指定 1 个主角</strong>
+              <p>未指定主角前，不进入关键帧设置，也不允许导出。</p>
+            </div>
+            <div class="candidate-toolbar">
+              <button class="ghost-button small" id="candidate-prev-button">上一个</button>
+              <div class="candidate-indicator" id="candidate-indicator">当前预览：未选择候选人</div>
+              <button class="ghost-button small" id="candidate-next-button">下一个</button>
+            </div>
+            <p class="tiny model-note">当前界面只保留可用的人体检测模型。YOLO 会在下一版改成本地 ONNX 推理接入，不再展示未落地的 Pose 选项。</p>
+            <div class="person-list" id="track-list">
+              <div class="empty-state small">先完成识别，再从列表里选一个主角，其他人会自动统一处理。</div>
+            </div>
+            <div class="step-footer">
+              <button class="primary-button next-step-button" id="go-step-3-button" type="button">下一步：设置关键帧</button>
+            </div>
+          </section>
+
+          <section class="timeline-panel panel wizard-step" data-step-panel="3">
+            <div class="section-head">
+              <h3>时间轴与输出规格</h3>
+              <span class="quiet-count" id="time-label">00:00 / 00:00</span>
+            </div>
+            <input id="timeline" type="range" min="0" max="0" step="0.01" value="0">
+            <div class="timeline-grid">
+              <label>
+                <span>入点</span>
+                <input id="trim-start" type="number" min="0" step="0.1" value="0">
+              </label>
+              <label>
+                <span>出点</span>
+                <input id="trim-end" type="number" min="0" step="0.1" value="0">
+              </label>
+              <label>
+                <span>检测采样</span>
+                <select id="sample-rate">
+                  <option value="0.12" selected>高精度 0.12s</option>
+                  <option value="0.2">标准 0.2s</option>
+                  <option value="0.35">快速 0.35s</option>
+                </select>
+              </label>
+              <label>
+                <span>输出分辨率</span>
+                <select id="output-size">
+                  <option value="source-portrait">原视频高度 9:16</option>
+                  <option value="720x1280" selected>720 × 1280</option>
+                  <option value="1080x1920">1080 × 1920</option>
+                  <option value="source-landscape">原视频分辨率</option>
+                  <option value="1280x720">1280 × 720</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel wizard-step" data-step-panel="3">
+            <div class="section-head">
+              <h3>主角关键帧</h3>
+              <button class="ghost-button small" id="clear-keyframes-button">清空切换点</button>
+            </div>
+            <div class="keyframe-list" id="hero-keyframe-list">
+              <div class="empty-state small">设定主角后，这里会显示全程主角和时间点切换记录。</div>
+            </div>
+            <div class="step-footer">
+              <button class="primary-button next-step-button" id="go-step-4-button" type="button">下一步：导出设置</button>
+            </div>
+          </section>
+
+          <section class="panel wizard-step" data-step-panel="4">
+            <div class="section-head">
+              <h3>导出设置</h3>
+            </div>
+            <div class="control-list">
+              <label>
+                <span>其他人处理方式</span>
+                <select id="redaction-style">
+                  <option value="mosaic" selected>马赛克</option>
+                  <option value="blur">模糊</option>
+                  <option value="solid">纯色遮挡</option>
+                </select>
+              </label>
+              <p class="tiny" id="selection-summary">识别后选择一个主角，其他人物会自动按上面的方式处理。</p>
+              <label>
+                <span>裁切留白</span>
+                <input id="crop-padding" type="range" min="0.1" max="0.6" step="0.02" value="0.28">
+              </label>
+              <label>
+                <span>安全边距</span>
+                <input id="safety-margin" type="range" min="0" max="0.4" step="0.02" value="0.1">
+              </label>
+              <label>
+                <span>中心平滑</span>
+                <input id="smoothing" type="range" min="0" max="0.95" step="0.05" value="0.75">
+              </label>
+              <label>
+                <span>导出帧率</span>
+                <select id="fps">
+                  <option value="30">30 fps</option>
+                  <option value="48">48 fps</option>
+                  <option value="60" selected>60 fps</option>
+                </select>
+              </label>
+              <p class="tiny" id="pipeline-note">页面内预览只负责校对。正式导出会优先走本地 FFmpeg 逐帧渲染与 H.264 编码，避免浏览器导出卡顿发糊。</p>
+            </div>
+            <div class="export-actions export-actions-block">
+              <button class="primary-button wide-button" id="export-button">导出高质量视频</button>
+              <a class="ghost-button wide-button disabled" id="download-link" href="#" download>下载结果</a>
+            </div>
+            <div class="progress-block">
+              <div class="progress-track">
+                <span id="progress-fill"></span>
+              </div>
+              <p class="tiny" id="progress-copy">还没有开始导出</p>
+            </div>
+          </section>
+
+          <section class="panel wizard-step" data-step-panel="4">
+            <div class="section-head">
+              <h3>最近导出</h3>
+              <span class="quiet-count" id="history-count">0</span>
+            </div>
+            <div class="history-list" id="history-list">
+              <div class="empty-state small">还没有导出记录</div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="preview-column">
+          <section class="canvas-panel panel">
+            <div class="canvas-toolbar">
+              <div>
+                <p class="eyebrow">Processed Preview</p>
+                <h3 id="preview-title">等待视频</h3>
+              </div>
+              <div class="canvas-actions">
+                <span class="status-badge" id="progress-badge">Idle</span>
+                <button class="ghost-button small" id="play-toggle">播放</button>
+              </div>
+            </div>
+            <div class="canvas-wrap" id="canvas-wrap">
+              <canvas id="preview-canvas" width="1280" height="720"></canvas>
+              <div class="canvas-empty" id="canvas-empty">
+                <strong>把课程录像拖进来</strong>
+                <span>分析后可选择主舞者、裁直拍并自动遮挡其他人。</span>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <video id="source-video" crossorigin="anonymous" playsinline hidden></video>
+  <canvas id="export-canvas" hidden></canvas>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
