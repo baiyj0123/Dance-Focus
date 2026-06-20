@@ -21,15 +21,54 @@
 - 本地服务不可用时，才回退浏览器 `MediaRecorder/WebCodecs`
 - 本地保存最近导出历史
 
-## 运行方式
+## 从零开始运行
 
-最稳妥的方式是直接启动本地工作台服务：
+如果你这台电脑什么都没装，按以下步骤来：
+
+### 1. 安装 Homebrew（macOS 包管理器）
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+### 2. 安装 FFmpeg
+
+```bash
+brew install ffmpeg
+```
+
+### 3. 安装 Python 依赖
+
+```bash
+pip3 install ultralytics opencv-python-headless numpy
+```
+
+### 4. 克隆本项目
+
+```bash
+git clone git@github.com:baiyj0123/Dance-Focus.git
+cd Dance-Focus
+```
+
+### 5. 启动
 
 ```bash
 python3 studio_server.py
 ```
 
-这样前端和本地 FFmpeg 导出会一起可用。
+然后浏览器访问 `http://127.0.0.1:4818`。
+
+> 首次启动会自动下载 YOLO11n 模型（约 6MB），请保持网络通畅。
+
+## 运行方式
+
+如果依赖已就绪，直接：
+
+```bash
+python3 studio_server.py
+```
+
+这样前端和本地 FFmpeg 导出会一起可用，浏览器访问 `http://127.0.0.1:4818`。
 
 ## 依赖说明
 
