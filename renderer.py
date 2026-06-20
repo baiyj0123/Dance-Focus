@@ -5,11 +5,14 @@ import os
 import subprocess
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 
 FFMPEG = os.environ.get("FFMPEG_BIN", "ffmpeg")
 FFPROBE = os.environ.get("FFPROBE_BIN", "ffprobe")
+EXPORT_CRF = os.environ.get("EXPORT_CRF", "12")
+EXPORT_PRESET = os.environ.get("EXPORT_PRESET", "veryslow")
 
 
 def render_project(input_path: str | Path, project: dict, output_path: str | Path) -> dict:
@@ -72,9 +75,13 @@ def render_project(input_path: str | Path, project: dict, output_path: str | Pat
         "-c:v",
         "libx264",
         "-preset",
-        "slow",
+        EXPORT_PRESET,
         "-crf",
-        "15",
+        EXPORT_CRF,
+        "-profile:v",
+        "high",
+        "-coder",
+        "1",
         "-pix_fmt",
         "yuv420p",
         "-movflags",
@@ -307,9 +314,8 @@ def mosaic_region(region: np.ndarray) -> np.ndarray:
 
 
 def blur_region(region: np.ndarray) -> np.ndarray:
-    h, w = region.shape[:2]
-    down = resize_bilinear(region, max(4, h // 12), max(4, w // 12))
-    return resize_bilinear(down, h, w)
+    blur = max(3, ((min(region.shape[:2]) // 14) * 2) + 1)
+    return cv2.GaussianBlur(region, (blur, blur), 0)
 
 
 def resize_nearest(image: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
@@ -324,24 +330,7 @@ def resize_bilinear(image: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
     src_h, src_w = image.shape[:2]
     if src_h == out_h and src_w == out_w:
         return image.copy()
-    y = np.linspace(0, src_h - 1, out_h)
-    x = np.linspace(0, src_w - 1, out_w)
-    y0 = np.floor(y).astype(int)
-    x0 = np.floor(x).astype(int)
-    y1 = np.clip(y0 + 1, 0, src_h - 1)
-    x1 = np.clip(x0 + 1, 0, src_w - 1)
-    wy = (y - y0).reshape(out_h, 1, 1)
-    wx = (x - x0).reshape(1, out_w, 1)
-
-    top_left = image[y0[:, None], x0[None, :]].astype(np.float32)
-    top_right = image[y0[:, None], x1[None, :]].astype(np.float32)
-    bottom_left = image[y1[:, None], x0[None, :]].astype(np.float32)
-    bottom_right = image[y1[:, None], x1[None, :]].astype(np.float32)
-
-    top = top_left * (1 - wx) + top_right * wx
-    bottom = bottom_left * (1 - wx) + bottom_right * wx
-    result = top * (1 - wy) + bottom * wy
-    return np.clip(result, 0, 255).astype(np.uint8)
+    return cv2.resize(image, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
 
 
 def normalize_box(box: dict) -> dict:

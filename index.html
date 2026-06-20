@@ -13,56 +13,70 @@
 <body>
   <div class="app-shell">
     <main class="workspace">
-      <section class="hero-header panel">
-        <header class="topbar">
-          <div class="topbar-copy">
-            <p class="eyebrow">Dance Studio Privacy Suite</p>
-            <h2>专业直拍剪辑工作台</h2>
-            <p class="topbar-note">导入视频后自动加载模型，识别人物后必须先选定一个跟踪主角，再设置关键帧和导出。</p>
-          </div>
-          <div class="topbar-metrics">
-            <div class="metric-card">
-              <span>识别采样</span>
-              <strong id="sampling-indicator">0.12s</strong>
-            </div>
-            <div class="metric-card">
-              <span>导出帧率</span>
-              <strong id="fps-indicator">60 fps</strong>
-            </div>
-          </div>
-          <div class="topbar-actions">
-            <label class="ghost-button upload-trigger" for="video-input">导入素材</label>
-            <button class="ghost-button" id="load-models-button">连接 YOLO</button>
-            <button class="primary-button" id="analyze-button">识别人物</button>
-          </div>
-        </header>
-
-        <section class="workflow-steps">
-          <button class="workflow-step active" data-step="1" type="button">
-            <span>01</span>
-            <strong>导入素材</strong>
-            <small>上传视频与初始化项目</small>
-          </button>
-          <button class="workflow-step" data-step="2" type="button">
-            <span>02</span>
-            <strong>识别人物</strong>
-            <small>分析候选人物与主角</small>
-          </button>
-          <button class="workflow-step" data-step="3" type="button">
-            <span>03</span>
-            <strong>设置关键帧</strong>
-            <small>按时间点切换主角</small>
-          </button>
-          <button class="workflow-step" data-step="4" type="button">
-            <span>04</span>
-            <strong>导出设置</strong>
-            <small>分辨率、帧率、输出</small>
-          </button>
-        </section>
-      </section>
-
       <section class="workbench-layout">
-        <div class="control-column">
+        <aside class="control-column">
+          <section class="sidebar-header panel">
+            <div class="sidebar-copy">
+              <p class="eyebrow">Dance Studio Privacy Suite</p>
+              <h1>专业直拍剪辑工作台</h1>
+              <p class="sidebar-note">把导入、识别、关键帧和导出都收进左侧工作栏；右侧保持预览常驻，不再让顶部说明占掉画面。</p>
+            </div>
+            <div class="sidebar-actions">
+              <label class="ghost-button upload-trigger" for="video-input">导入素材</label>
+              <button class="ghost-button" id="load-models-button">连接 YOLO</button>
+              <button class="primary-button" id="analyze-button">识别人物</button>
+            </div>
+            <div class="sidebar-metrics">
+              <div class="metric-card">
+                <span>识别采样</span>
+                <strong id="sampling-indicator">0.12s</strong>
+              </div>
+              <div class="metric-card">
+                <span>导出帧率</span>
+                <strong id="fps-indicator">60 fps</strong>
+              </div>
+            </div>
+            <section class="workflow-steps sidebar-steps">
+              <button class="workflow-step active" data-step="1" type="button">
+                <span>01</span>
+                <strong>导入素材</strong>
+                <small>上传视频与初始化项目</small>
+              </button>
+              <button class="workflow-step" data-step="2" type="button">
+                <span>02</span>
+                <strong>识别人物</strong>
+                <small>分析候选人物与主角</small>
+              </button>
+              <button class="workflow-step" data-step="3" type="button">
+                <span>03</span>
+                <strong>设置关键帧</strong>
+                <small>按时间点切换主角</small>
+              </button>
+              <button class="workflow-step" data-step="4" type="button">
+                <span>04</span>
+                <strong>导出设置</strong>
+                <small>分辨率、帧率、输出</small>
+              </button>
+            </section>
+            <section class="status-strip sidebar-status">
+              <div class="status-chip">
+                <span>模型状态</span>
+                <strong id="model-status">未加载</strong>
+              </div>
+              <div class="status-chip">
+                <span>分析状态</span>
+                <strong id="analysis-status">等待视频</strong>
+              </div>
+              <div class="status-chip">
+                <span>导出状态</span>
+                <strong id="export-status">未开始</strong>
+              </div>
+              <div class="status-chip pipeline-chip">
+                <span>导出链路</span>
+                <strong id="pipeline-status">等待本地 YOLO + FFmpeg</strong>
+              </div>
+            </section>
+          </section>
           <section class="upload-bar panel wide wizard-step active" data-step-panel="1">
             <div class="upload-copy">
               <h3>素材与识别配置</h3>
@@ -90,25 +104,6 @@
             </div>
             <div class="step-footer">
               <button class="primary-button next-step-button" id="go-step-2-button" type="button">下一步：识别人物</button>
-            </div>
-          </section>
-
-          <section class="panel status-strip">
-            <div class="status-chip">
-              <span>模型状态</span>
-              <strong id="model-status">未加载</strong>
-            </div>
-            <div class="status-chip">
-              <span>分析状态</span>
-              <strong id="analysis-status">等待视频</strong>
-            </div>
-            <div class="status-chip">
-              <span>导出状态</span>
-              <strong id="export-status">未开始</strong>
-            </div>
-            <div class="status-chip pipeline-chip">
-              <span>导出链路</span>
-              <strong id="pipeline-status">等待本地 FFmpeg</strong>
             </div>
           </section>
 
@@ -161,8 +156,8 @@
               <label>
                 <span>输出分辨率</span>
                 <select id="output-size">
-                  <option value="source-portrait">原视频高度 9:16</option>
-                  <option value="720x1280" selected>720 × 1280</option>
+                  <option value="source-portrait" selected>原视频高度 9:16</option>
+                  <option value="720x1280">720 × 1280</option>
                   <option value="1080x1920">1080 × 1920</option>
                   <option value="source-landscape">原视频分辨率</option>
                   <option value="1280x720">1280 × 720</option>
@@ -218,6 +213,10 @@
                   <option value="60" selected>60 fps</option>
                 </select>
               </label>
+              <div class="quality-note">
+                <strong>清晰度建议</strong>
+                <p>优先保持“原视频高度 9:16”并使用本地 FFmpeg 导出。720p 只适合快速预览，不适合作为最终成片。</p>
+              </div>
               <p class="tiny" id="pipeline-note">页面内预览只负责校对。正式导出会优先走本地 FFmpeg 逐帧渲染与 H.264 编码，避免浏览器导出卡顿发糊。</p>
             </div>
             <div class="export-actions export-actions-block">
@@ -241,9 +240,9 @@
               <div class="empty-state small">还没有导出记录</div>
             </div>
           </section>
-        </div>
+        </aside>
 
-        <aside class="preview-column">
+        <section class="preview-column">
           <section class="canvas-panel panel">
             <div class="canvas-toolbar">
               <div>
@@ -263,7 +262,7 @@
               </div>
             </div>
           </section>
-        </aside>
+        </section>
       </section>
     </main>
   </div>

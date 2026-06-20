@@ -36,12 +36,14 @@ python3 studio_server.py
 - 本地识别：`/usr/bin/python3 + ultralytics + opencv-python-headless`
 - 检测模型：`YOLO11n`
 - 跟踪器：`ByteTrack`
+- 轨迹补强：基于外观签名的碎轨合并
 - 本地渲染：`python3 + numpy + ffmpeg`
 - 导出容器：`mp4`
 
 ## 当前限制
 
 - 当前已经接入 `YOLO + ByteTrack`，但还没有 `ReID`，所以多人快速交叉、长时间遮挡后仍建议配合关键帧切主角
+- 当前导出默认优先保留原视频高度，渲染缩放已切到 `OpenCV Lanczos`，编码默认 `H.264 CRF 12 + veryslow`
 - 本地逐帧渲染质量已经明显高于浏览器导出，但速度会慢于纯转码
 - 模糊/马赛克由本地 NumPy 渲染实现，已经够用，但还不是影视级遮罩分割
 

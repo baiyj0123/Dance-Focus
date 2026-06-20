@@ -64,28 +64,11 @@ a {
   min-width: 0;
 }
 
-.hero-header,
 .panel {
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.72);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
-}
-
-.hero-header {
-  padding: 18px 22px 20px;
-  border-radius: var(--radius-xl);
-}
-
-.topbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) auto auto;
-  gap: 18px;
-  align-items: start;
-}
-
-.topbar-copy {
-  min-width: 0;
 }
 
 .eyebrow {
@@ -97,7 +80,7 @@ a {
   color: #7a7368;
 }
 
-.topbar h2,
+.sidebar-copy h1,
 .upload-copy h3,
 .canvas-toolbar h3,
 .section-head h3,
@@ -105,27 +88,6 @@ a {
   margin: 0;
   letter-spacing: -0.05em;
   font-weight: 700;
-}
-
-.topbar h2 {
-  margin-top: 10px;
-  font-size: clamp(2rem, 3vw, 3.1rem);
-  line-height: 0.94;
-  max-width: 10ch;
-}
-
-.topbar-note {
-  margin: 14px 0 0;
-  max-width: 38ch;
-  color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.55;
-}
-
-.topbar-metrics {
-  display: grid;
-  grid-auto-flow: column;
-  gap: 10px;
 }
 
 .metric-card,
@@ -163,7 +125,7 @@ a {
   font-weight: 700;
 }
 
-.topbar-actions,
+.sidebar-actions,
 .upload-actions,
 .mode-list,
 .canvas-actions,
@@ -232,9 +194,7 @@ a {
 
 .workflow-steps {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 18px;
 }
 
 .workflow-step {
@@ -315,9 +275,10 @@ a {
 
 .workbench-layout {
   display: grid;
-  grid-template-columns: 420px minmax(0, 1fr);
+  grid-template-columns: 400px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
+  min-height: calc(100vh - 48px);
 }
 
 .control-column,
@@ -326,9 +287,60 @@ a {
   gap: 18px;
 }
 
-.preview-column {
+.control-column {
   position: sticky;
   top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding-right: 4px;
+  align-content: start;
+}
+
+.preview-column {
+  min-width: 0;
+}
+
+.sidebar-header {
+  display: grid;
+  gap: 16px;
+}
+
+.sidebar-copy h1 {
+  margin-top: 8px;
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 0.96;
+  max-width: 8ch;
+}
+
+.sidebar-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.sidebar-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.sidebar-actions .primary-button {
+  grid-column: 1 / -1;
+}
+
+.sidebar-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sidebar-steps {
+  grid-template-columns: 1fr;
+}
+
+.sidebar-status {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .panel.wide {
@@ -505,6 +517,24 @@ input[type="range"] {
   gap: 8px;
 }
 
+.quality-note {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(247, 242, 234, 0.92);
+  border: 1px solid var(--line);
+}
+
+.quality-note strong,
+.quality-note p {
+  margin: 0;
+}
+
+.quality-note p {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .step-footer {
   display: flex;
   justify-content: flex-end;
@@ -586,7 +616,7 @@ input[type="range"] {
   place-items: center;
   margin-top: 14px;
   padding: 18px;
-  min-height: 620px;
+  min-height: calc(100vh - 132px);
   background: linear-gradient(180deg, var(--preview-stage) 0%, var(--preview-bg) 100%);
   border-radius: 28px;
   overflow: hidden;
@@ -625,20 +655,19 @@ input[type="range"] {
 }
 
 @media (max-width: 1280px) {
-  .topbar {
-    grid-template-columns: 1fr;
-  }
-
-  .topbar h2 {
-    max-width: none;
-  }
-
   .workbench-layout {
     grid-template-columns: 1fr;
   }
 
-  .preview-column {
+  .control-column {
     position: static;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .canvas-wrap {
+    min-height: 560px;
   }
 }
 
@@ -647,14 +676,13 @@ input[type="range"] {
     padding: 14px;
   }
 
-  .hero-header,
   .panel {
     padding: 16px;
     border-radius: 24px;
   }
 
-  .topbar-actions,
-  .topbar-metrics,
+  .sidebar-actions,
+  .sidebar-metrics,
   .upload-actions,
   .export-actions,
   .track-actions {
@@ -663,6 +691,7 @@ input[type="range"] {
 
   .workflow-steps,
   .status-strip,
+  .sidebar-status,
   .inline-meta,
   .timeline-grid {
     grid-template-columns: 1fr;
