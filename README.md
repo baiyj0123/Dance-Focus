@@ -276,3 +276,7 @@ EXPORT_PRESET=medium EXPORT_CRF=18 python studio_server.py
 ## 许可证
 
 本项目基于 [MIT License](LICENSE) 开源。
+
+---
+
+*本项目由 AI 编程助手 Codex 辅助生成。*
