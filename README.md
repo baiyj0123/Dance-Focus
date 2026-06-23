@@ -275,4 +275,4 @@ EXPORT_PRESET=medium EXPORT_CRF=18 python studio_server.py
 
 ## 许可证
 
-如需开源发布，请在仓库中补充明确的许可证文件，例如 `MIT`、`Apache-2.0` 或其他适合项目用途的许可证。
+本项目基于 [MIT License](LICENSE) 开源。
