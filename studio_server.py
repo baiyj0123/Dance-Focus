@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import traceback
 import urllib.parse
 from email.parser import BytesParser
 from email.policy import default
@@ -78,6 +79,7 @@ class StudioHandler(SimpleHTTPRequestHandler):
                     "size_label": result["size_label"],
                 })
         except Exception as exc:
+            traceback.print_exc()
             self.send_response(500)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
