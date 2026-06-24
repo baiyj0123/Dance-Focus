@@ -256,6 +256,21 @@ Windows：安装 FFmpeg 后，把 `bin` 目录加入系统 `PATH`，或通过 `F
 EXPORT_PRESET=medium EXPORT_CRF=18 python studio_server.py
 ```
 
+### `Numpy is not available` 或 `No module named 'numpy'`
+
+说明当前 Python 环境缺少 numpy。进入虚拟环境安装：
+
+```bash
+source .venv/bin/activate
+pip install numpy
+```
+
+如果 numpy 已装但仍报错，可能是 numpy 版本与 torch 不兼容，降级：
+
+```bash
+pip install "numpy<2"
+```
+
 ## 当前限制
 
 - 尚未接入完整 ReID，复杂遮挡后仍可能出现人物 ID 切换
