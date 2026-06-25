@@ -22,7 +22,7 @@
              
             </div>
             <div class="sidebar-actions">
-              <label class="ghost-button upload-trigger" for="video-input">导入素材</label>
+              <button class="ghost-button upload-trigger" id="upload-button" type="button">导入素材</button>
               <button class="ghost-button" id="load-models-button">连接 YOLO</button>
               <button class="primary-button" id="analyze-button">识别人物</button>
             </div>
@@ -98,7 +98,7 @@
               </div>
             </div>
             <div class="upload-actions">
-              <input id="video-input" type="file" accept="video/*" hidden>
+              <input class="visually-hidden" id="video-input" type="file" accept="video/*" aria-label="选择舞蹈视频素材">
               <button class="ghost-button" id="demo-button">查看演示布局</button>
               <button class="ghost-button danger-button" id="reset-button">重置项目</button>
             </div>

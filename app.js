@@ -76,6 +76,7 @@ const els = {
   playToggle: document.querySelector("#play-toggle"),
   downloadLink: document.querySelector("#download-link"),
   modeButtons: [...document.querySelectorAll(".mode-pill[data-mode]")],
+  uploadButton: document.querySelector("#upload-button"),
   loadModelsButton: document.querySelector("#load-models-button"),
   analyzeButton: document.querySelector("#analyze-button"),
   exportButton: document.querySelector("#export-button"),
@@ -129,6 +130,14 @@ function wireEvents() {
     const [file] = event.target.files || [];
     if (!file) return;
     await loadVideoFile(file);
+  });
+
+  els.uploadButton?.addEventListener("click", () => {
+    if (!els.videoInput) {
+      alert("上传控件没有正确初始化，请刷新页面后重试。");
+      return;
+    }
+    els.videoInput.click();
   });
 
   els.loadModelsButton.addEventListener("click", async () => {
