@@ -23,6 +23,7 @@ const state = {
   lastPreviewBox: null,
   previewPlaying: false,
   previewLoop: 0,
+  toastTimer: 0,
   demoMode: false,
   lastAnalysisCount: 0,
   localApiReady: false,
@@ -85,6 +86,7 @@ const els = {
   resetButton: document.querySelector("#reset-button"),
   workflowSteps: [...document.querySelectorAll("[data-step]")],
   stepPanels: [...document.querySelectorAll("[data-step-panel]")],
+  toast: document.querySelector("#toast"),
 };
 
 const ctx = els.previewCanvas.getContext("2d", { willReadFrequently: true });
@@ -268,7 +270,7 @@ async function loadVideoFile(file) {
     setStatus("analysis", "加载视频中");
     els.progressBadge.textContent = "Loading Video";
     updateProgress(0.08, "正在读取视频信息");
-    els.sourceVideo.preload = "metadata";
+    els.sourceVideo.preload = "auto";
     els.sourceVideo.src = state.sourceUrl;
     els.sourceVideo.load();
 
@@ -291,7 +293,13 @@ async function loadVideoFile(file) {
     syncTrimInputs();
     resizePreviewCanvas();
     await seekVideo(0);
-    renderCurrentFrame();
+    const frameReady = await waitForVideoFrame(els.sourceVideo, 2500, { allowTimeout: true });
+    if (!frameReady || els.sourceVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await primeVideoFrame(els.sourceVideo);
+      await seekVideo(0);
+      await waitForVideoFrame(els.sourceVideo, 1200);
+    }
+    renderCurrentFrame({ throwOnPreviewError: true });
 
     els.canvasEmpty.style.display = "none";
     els.previewTitle.textContent = file.name;
@@ -302,6 +310,9 @@ async function loadVideoFile(file) {
     updateProgress(0, "视频已加载，可以开始识别");
     state.currentStep = 2;
     renderWorkflow();
+    const successDetail = `${file.name} · ${state.metadata.width}×${state.metadata.height} · ${formatTime(state.metadata.duration)}`;
+    showToast("上传成功", successDetail);
+    alert(`上传成功\n${successDetail}\n\n视频已自动加载到预览区，可以直接点击“识别人物”。`);
     void ensureDetector({ silent: true });
   } catch (error) {
     console.error(error);
@@ -312,6 +323,7 @@ async function loadVideoFile(file) {
     setStatus("analysis", "加载失败");
     els.progressBadge.textContent = "Load Failed";
     updateProgress(0, message);
+    showToast("上传失败", message);
     alert(message);
   }
 }
@@ -408,39 +420,51 @@ async function analyzeVideo() {
   els.progressBadge.textContent = "Analyzing";
   updateProgress(0, "正在抽样检测人物轨迹");
 
-  const duration = state.metadata.duration;
-  let trackId = 1;
-  const analysis = await analyzeVideoViaLocalYolo(duration);
-  const frames = analysis.frames || [];
+  try {
+    const duration = state.metadata.duration;
+    let trackId = 1;
+    const analysis = await analyzeVideoViaLocalYolo(duration);
+    const frames = analysis.frames || [];
 
-  if (frames.some((frame) => frame.boxes?.some((box) => box.trackId))) {
-    ingestTrackedFrames(frames, duration);
-  } else {
-    for (const frame of frames) {
-      const boxes = dedupeBoxes((frame.boxes || []).map(normalizeDetection).filter(Boolean));
-      const assignments = assignToTracks(boxes, frame.time, () => `P${trackId++}`);
-      state.analysisFrames.push({ time: frame.time, boxes: assignments });
-      updateProgress(
-        Math.min(frame.time / Math.max(duration, 0.01), 1),
-        `YOLO 识别中 ${formatTime(frame.time)} / ${formatTime(duration)}`
-      );
+    if (frames.some((frame) => frame.boxes?.some((box) => box.trackId))) {
+      ingestTrackedFrames(frames, duration);
+    } else {
+      for (const frame of frames) {
+        const boxes = dedupeBoxes((frame.boxes || []).map(normalizeDetection).filter(Boolean));
+        const assignments = assignToTracks(boxes, frame.time, () => `P${trackId++}`);
+        state.analysisFrames.push({ time: frame.time, boxes: assignments });
+        updateProgress(
+          Math.min(frame.time / Math.max(duration, 0.01), 1),
+          `YOLO 识别中 ${formatTime(frame.time)} / ${formatTime(duration)}`
+        );
+      }
+      finalizeTracks();
     }
-    finalizeTracks();
+    state.inspectTrackId = state.tracks[0]?.id ?? null;
+    state.tracks.forEach((track) => {
+      track.policy = "redact";
+    });
+    renderTrackList();
+    renderHeroKeyframes();
+    state.currentStep = 2;
+    renderWorkflow();
+    setStatus("analysis", state.tracks.length ? "已完成" : "未识别到人物");
+    els.progressBadge.textContent = "Pick Main Subject";
+    updateProgress(1, state.tracks.length ? "识别完成，请先从左侧候选列表中选择要跟踪的主角" : "没有检测到稳定人物轨迹");
+    await seekVideo(Number(els.timeline.value || 0));
+    await waitForVideoFrame(els.sourceVideo, 2500);
+    renderCurrentFrame();
+  } catch (error) {
+    console.error(error);
+    const message = explainAnalyzeError(error);
+    setStatus("analysis", "识别失败");
+    els.progressBadge.textContent = "Analyze Failed";
+    updateProgress(0, message);
+    alert(message);
+  } finally {
+    state.analysisBusy = false;
+    updateActionAvailability();
   }
-  state.analysisBusy = false;
-  state.inspectTrackId = state.tracks[0]?.id ?? null;
-  state.tracks.forEach((track) => {
-    track.policy = "redact";
-  });
-  renderTrackList();
-  renderHeroKeyframes();
-  state.currentStep = 2;
-  renderWorkflow();
-  setStatus("analysis", state.tracks.length ? "已完成" : "未识别到人物");
-  els.progressBadge.textContent = "Pick Main Subject";
-  updateProgress(1, state.tracks.length ? "识别完成，请先从左侧候选列表中选择要跟踪的主角" : "没有检测到稳定人物轨迹");
-  await seekVideo(Number(els.timeline.value || 0));
-  renderCurrentFrame();
 }
 
 function normalizeDetection(detection) {
@@ -681,12 +705,26 @@ function renderTrackList() {
   updateCandidateIndicator();
 }
 
-function renderCurrentFrame() {
+function renderCurrentFrame(options = {}) {
   if (!state.sourceLoaded) {
     renderDemoFrame();
     return;
   }
-  drawFrame(ctx, els.previewCanvas, Number(els.timeline.value || 0), false);
+  try {
+    drawFrame(ctx, els.previewCanvas, Number(els.timeline.value || 0), false);
+  } catch (error) {
+    console.error(error);
+    if (options.throwOnPreviewError) {
+      throw new Error("VIDEO_PREVIEW_RENDER_FAILED");
+    }
+    const message = explainPreviewError(error);
+    setStatus("analysis", "预览失败");
+    els.progressBadge.textContent = "Preview Failed";
+    updateProgress(0, message);
+    showToast("预览失败", message);
+    alert(message);
+    return;
+  }
   updateTimeLabel(Number(els.timeline.value || 0));
   if (state.tracks.length) {
     renderTrackList();
@@ -1440,6 +1478,25 @@ function setStatus(slot, text) {
   if (slot === "export") els.exportStatus.textContent = text;
 }
 
+function showToast(title, detail = "") {
+  if (!els.toast) return;
+  clearTimeout(state.toastTimer);
+  els.toast.innerHTML = `<strong>${escapeHtml(title)}</strong>${detail ? `<span>${escapeHtml(detail)}</span>` : ""}`;
+  els.toast.classList.add("show");
+  state.toastTimer = setTimeout(() => {
+    els.toast.classList.remove("show");
+  }, 3200);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function loadHistory() {
   try {
     return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
@@ -1596,6 +1653,11 @@ async function seekVideo(time) {
 
 function waitForVideoMetadata(video, timeoutMs) {
   return new Promise((resolve, reject) => {
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA && video.videoWidth && video.videoHeight) {
+      resolve();
+      return;
+    }
+
     const cleanup = () => {
       clearTimeout(timer);
       video.removeEventListener("loadedmetadata", onLoaded);
@@ -1633,18 +1695,116 @@ function waitForVideoMetadata(video, timeoutMs) {
   });
 }
 
+function waitForVideoFrame(video, timeoutMs, options = {}) {
+  return new Promise((resolve, reject) => {
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) {
+      resolve(true);
+      return;
+    }
+
+    let requestHandle = 0;
+    const cleanup = () => {
+      clearTimeout(timer);
+      video.removeEventListener("loadeddata", onReady);
+      video.removeEventListener("canplay", onReady);
+      video.removeEventListener("error", onError);
+      if (requestHandle && "cancelVideoFrameCallback" in video) {
+        video.cancelVideoFrameCallback(requestHandle);
+      }
+    };
+
+    const onReady = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error(`VIDEO_LOAD_ERROR_${video.error?.code || "UNKNOWN"}`));
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      if (options.allowTimeout) {
+        resolve(false);
+        return;
+      }
+      reject(new Error("VIDEO_FRAME_TIMEOUT"));
+    }, timeoutMs);
+
+    video.addEventListener("loadeddata", onReady, { once: true });
+    video.addEventListener("canplay", onReady, { once: true });
+    video.addEventListener("error", onError, { once: true });
+    if ("requestVideoFrameCallback" in video) {
+      requestHandle = video.requestVideoFrameCallback(onReady);
+    }
+  });
+}
+
+async function primeVideoFrame(video) {
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+  const wasMuted = video.muted;
+  video.muted = true;
+  try {
+    await video.play();
+    video.pause();
+    video.currentTime = 0;
+  } catch {
+    video.muted = wasMuted;
+    throw new Error("VIDEO_AUTOPLAY_PRIME_BLOCKED");
+  }
+  video.muted = wasMuted;
+}
+
 function explainVideoLoadError(error, file) {
+  const message = String(error?.message || "");
   const extension = (file?.name?.split(".").pop() || "").toLowerCase();
   if (extension === "mov") {
     return "这个 MOV 视频在当前浏览器里没成功解码，通常是 HEVC/H.265 编码导致。建议先转成 MP4（H.264）再试。";
   }
-  if (String(error?.message || "").includes("VIDEO_LOAD_TIMEOUT")) {
+  if (message.includes("VIDEO_PREVIEW_RENDER_FAILED")) {
+    return "视频上传成功，但预览画面没有渲染出来。常见原因是浏览器不支持这个视频编码，建议转成 MP4（H.264 + AAC）后再上传。";
+  }
+  if (message.includes("VIDEO_FRAME_TIMEOUT") || message.includes("VIDEO_AUTOPLAY_PRIME_BLOCKED")) {
+    return "视频已读取到信息，但浏览器没有成功解码首帧，所以预览暂时显示不出来。建议换 Chrome/Safari 最新版，或转成 MP4（H.264 + AAC）后再试。";
+  }
+  if (message.includes("VIDEO_METADATA_INVALID")) {
+    return "视频元数据不完整，无法读取时长或分辨率。建议重新导出为标准 MP4（H.264 + AAC）后再上传。";
+  }
+  if (message.includes("VIDEO_LOAD_TIMEOUT")) {
     return "视频加载超时。文件可能过大、编码不兼容，或当前浏览器没有正确解析这个视频。";
   }
-  if (String(error?.message || "").includes("VIDEO_LOAD_ERROR")) {
+  if (message.includes("VIDEO_LOAD_STALLED")) {
+    return "视频加载中断了。请确认文件完整，或换一个较小的 MP4 视频再试。";
+  }
+  if (message.includes("VIDEO_LOAD_ABORTED")) {
+    return "视频加载被浏览器中止了。请重新选择文件再试一次。";
+  }
+  if (message.includes("VIDEO_LOAD_ERROR")) {
     return "浏览器没能解码这个视频。最常见原因是编码格式不兼容，建议改成 MP4（H.264 + AAC）后再上传。";
   }
   return "视频没有成功加载。建议优先使用 MP4（H.264）格式再试一次。";
+}
+
+function explainPreviewError(error) {
+  const message = String(error?.message || "");
+  if (message.includes("VIDEO_PREVIEW_RENDER_FAILED")) {
+    return "预览画面渲染失败。建议把视频转成 MP4（H.264 + AAC）后重新上传。";
+  }
+  return "预览画面显示失败。请尝试重新上传，或使用标准 MP4（H.264 + AAC）格式。";
+}
+
+function explainAnalyzeError(error) {
+  const message = String(error?.message || error || "");
+  if (message.includes("Failed to fetch") || message.includes("LOCAL_API_OFFLINE")) {
+    return "本地 YOLO 服务没有连接成功。请确认已在项目目录运行 `/usr/bin/python3 studio_server.py`，页面地址使用 http://127.0.0.1:4818。";
+  }
+  if (message.includes("YOLO_NOT_READY")) {
+    return "本地服务已启动，但 YOLO 模型还没就绪。请等终端下载/初始化完成后再点识别人物。";
+  }
+  if (message.includes("LOCAL_YOLO_FAILED") || message.includes("500")) {
+    return "本地 YOLO 分析失败。请看运行 `studio_server.py` 的终端输出，通常是依赖、模型文件或视频编码导致。";
+  }
+  return `识别人物失败：${message || "未知错误"}`;
 }
 
 function explainModelLoadError(error) {
